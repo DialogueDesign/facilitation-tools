@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>話す人ランダム決定</title>
+<style>
+  :root {
+    --bg: #fbfaf7;
+    --surface: #ffffff;
+    --text: #141414;
+    --muted: #3d3d3d;
+    --accent: #b3261e;
+    --accent-text: #ffffff;
+    --chip: #ece9e2;
+    --chip-done: #d9d5cc;
+    --border: #2a2a2a;
+    --shadow: 0 8px 30px rgba(0,0,0,.12);
+  }
+  [data-theme="dark"] {
+    --bg: #111214;
+    --surface: #1c1d21;
+    --text: #f6f5f2;
+    --muted: #d0cec8;
+    --accent: #ffb74d;
+    --accent-text: #111214;
+    --chip: #2b2d33;
+    --chip-done: #3a3d45;
+    --border: #e0ded8;
+    --shadow: 0 8px 30px rgba(0,0,0,.5);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+    font-weight: 500;
+    font-size: 20px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  button {
+    font: inherit;
+    font-weight: 700;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  /* ヘッダー */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 24px;
+  }
+  .title {
+    font-size: clamp(20px, 1.8vw, 28px);
+    font-weight: 800;
+    margin: 0;
+  }
+  .tool-buttons { display: flex; gap: 10px; }
+  .ghost {
+    background: transparent;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    padding: 6px 14px;
+    font-size: 18px;
+  }
+  .ghost kbd { margin-left: 6px; }
+
+  /* メイン */
+  main {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+  }
+  .stage {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(16px, 3vh, 36px);
+    padding: 0 24px;
+    min-width: 0;
+  }
+  .label {
+    font-size: clamp(22px, 2.4vw, 40px);
+    font-weight: 700;
+    color: var(--muted);
+    margin: 0;
+  }
+  .result {
+    font-size: clamp(64px, 11vw, 220px);
+    font-weight: 900;
+    line-height: 1.1;
+    text-align: center;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    min-height: 1.2em;
+  }
+  .result.placeholder { color: var(--muted); font-size: clamp(40px, 6vw, 110px); }
+  .result.spinning { color: var(--muted); }
+  .result.decided { color: var(--accent); animation: pop .45s ease-out; }
+  @keyframes pop {
+    0% { transform: scale(.7); }
+    60% { transform: scale(1.08); }
+    100% { transform: scale(1); }
+  }
+
+  .primary {
+    background: var(--accent);
+    color: var(--accent-text);
+    border: none;
+    border-radius: 999px;
+    padding: 18px 56px;
+    font-size: clamp(24px, 2.4vw, 38px);
+    box-shadow: var(--shadow);
+  }
+  .primary:disabled { opacity: .6; cursor: default; }
+  .sub-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+  /* 順番表示 */
+  .order {
+    display: none;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    columns: 2;
+    column-gap: 64px;
+    font-size: clamp(26px, 3vw, 52px);
+    font-weight: 800;
+  }
+  .order li { break-inside: avoid; padding: 4px 0; }
+  .order li span.num {
+    display: inline-block;
+    min-width: 2.2em;
+    color: var(--accent);
+  }
+  .order.single { columns: 1; }
+  .order.many { columns: 3; column-gap: 48px; font-size: clamp(22px, 2.4vw, 40px); }
+  .order.crowd { columns: 4; column-gap: 32px; font-size: clamp(18px, 1.8vw, 30px); }
+  body.order-mode .roster, body.order-mode .roster-note { display: none !important; }
+  body.order-mode .order { display: block; }
+  body.order-mode .result, body.order-mode .label-pick { display: none; }
+
+  /* 残りの人 */
+  .roster {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    max-width: 1100px;
+  }
+  .chip {
+    background: var(--chip);
+    border-radius: 999px;
+    padding: 6px 16px;
+    font-size: clamp(18px, 1.5vw, 24px);
+    font-weight: 700;
+  }
+  .chip.done {
+    background: var(--chip-done);
+    text-decoration: line-through;
+    text-decoration-thickness: 3px;
+    color: var(--muted);
+  }
+  .roster-note { font-size: 18px; color: var(--muted); margin: 0; }
+
+  /* 設定パネル */
+  aside {
+    width: 380px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-left: 2px solid var(--border);
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+  }
+  aside h2 { font-size: 22px; margin: 0; }
+  aside label.block { font-weight: 700; display: block; margin-bottom: 6px; }
+  textarea {
+    width: 100%;
+    height: 34vh;
+    min-height: 160px;
+    font: inherit;
+    font-size: 20px;
+    line-height: 1.5;
+    padding: 10px 12px;
+    background: var(--bg);
+    color: var(--text);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    resize: vertical;
+  }
+  .hint { font-size: 18px; color: var(--muted); margin: 4px 0 0; }
+  .option { display: flex; gap: 10px; align-items: flex-start; font-size: 18px; }
+  .option input { flex-shrink: 0; width: 22px; height: 22px; margin-top: 3px; accent-color: var(--accent); }
+  select {
+    font: inherit;
+    font-size: 18px;
+    padding: 6px 10px;
+    background: var(--bg);
+    color: var(--text);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+  }
+  .shortcuts { font-size: 18px; line-height: 1.8; margin: 0; padding: 0; list-style: none; }
+  kbd {
+    display: inline-block;
+    min-width: 1.6em;
+    text-align: center;
+    padding: 0 6px;
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: .85em;
+    font-weight: 700;
+    line-height: 1.4;
+  }
+  footer {
+    padding: 8px 24px 14px;
+    font-size: 18px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  /* 見せるモード（設定パネルを隠す） */
+  body.present aside { display: none; }
+  body.present .tool-buttons .hide-in-present { display: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .result.decided { animation: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1 class="title">話す人ランダム決定</h1>
+  <div class="tool-buttons">
+    <button class="ghost" id="btnSettings" type="button">設定<kbd>S</kbd></button>
+    <button class="ghost" id="btnTheme" type="button">テーマ<kbd>T</kbd></button>
+    <button class="ghost" id="btnFull" type="button">全画面<kbd>F</kbd></button>
+  </div>
+</header>
+
+<main>
+  <section class="stage">
+    <p class="label label-pick" id="label">次に話すのは…</p>
+    <div class="result placeholder" id="result" aria-live="polite">？</div>
+    <ol class="order" id="order" aria-live="polite"></ol>
+
+    <button class="primary" id="btnPick" type="button">話す人を決める</button>
+    <div class="sub-actions">
+      <button class="ghost" id="btnOrder" type="button">全員の順番を決める<kbd>O</kbd></button>
+      <button class="ghost" id="btnReset" type="button">一巡をリセット<kbd>R</kbd></button>
+    </div>
+
+    <div class="roster" id="roster"></div>
+    <p class="roster-note" id="rosterNote"></p>
+  </section>
+
+  <aside id="settings" aria-label="設定">
+    <h2>設定</h2>
+    <div>
+      <label class="block" for="names">参加者の名前</label>
+      <textarea id="names" spellcheck="false" placeholder="1行に1人ずつ入力&#10;例：&#10;さとう&#10;すずき&#10;たかはし"></textarea>
+      <p class="hint">1行に1人。読点やカンマ区切りの貼り付けもOK。名前はこのブラウザの中にだけ保存されます。</p>
+    </div>
+    <label class="option">
+      <input type="checkbox" id="optRound" checked>
+      <span>一巡モード（全員が1回ずつ当たるまで同じ人を選ばない）</span>
+    </label>
+    <label class="option">
+      <input type="checkbox" id="optRoster" checked>
+      <span>画面に参加者の一覧を出す</span>
+    </label>
+    <div>
+      <label class="block" for="optSpeed">演出の長さ</label>
+      <select id="optSpeed">
+        <option value="short">短い（約1秒）</option>
+        <option value="normal" selected>ふつう（約2.5秒）</option>
+        <option value="long">長い（約4秒）</option>
+      </select>
+    </div>
+    <div>
+      <h2 style="font-size:20px;margin-bottom:6px">ショートカット</h2>
+      <ul class="shortcuts">
+        <li><kbd>Space</kbd> / <kbd>Enter</kbd> 話す人を決める</li>
+        <li><kbd>O</kbd> 全員の順番を決める</li>
+        <li><kbd>R</kbd> 一巡をリセット</li>
+        <li><kbd>S</kbd> 設定の表示切替（見せるモード）</li>
+        <li><kbd>T</kbd> ライト / ダーク切替</li>
+        <li><kbd>F</kbd> 全画面</li>
+      </ul>
+    </div>
+  </aside>
+</main>
+
+<footer id="footer"><kbd>Space</kbd> で決める ・ <kbd>S</kbd> で設定を隠す</footer>
+
+<script>
+(() => {
+  "use strict";
+
+  const STORAGE_KEY = "facilitation-tools:speaker-picker";
+  const $ = (id) => document.getElementById(id);
+  const els = {
+    names: $("names"), result: $("result"), label: $("label"), order: $("order"),
+    roster: $("roster"), rosterNote: $("rosterNote"),
+    btnPick: $("btnPick"), btnOrder: $("btnOrder"), btnReset: $("btnReset"),
+    btnSettings: $("btnSettings"), btnTheme: $("btnTheme"), btnFull: $("btnFull"),
+    optRound: $("optRound"), optRoster: $("optRoster"), optSpeed: $("optSpeed"),
+    footer: $("footer"),
+  };
+
+  const state = {
+    namesText: "",
+    picked: [],        // 今の一巡で当たった人
+    last: null,        // 直前に当たった人
+    roundMode: true,
+    showRoster: true,
+    speed: "normal",
+    theme: null,
+    present: false,
+  };
+  let spinning = false;
+
+  // ---------- 保存 ----------
+  function load() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+      if (saved && typeof saved === "object") Object.assign(state, saved);
+    } catch (e) { /* 保存が使えない環境でも動かす */ }
+  }
+  function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  // ---------- 乱数（公平さのため crypto を使う） ----------
+  function randomInt(max) {
+    if (max <= 1) return 0;
+    const limit = Math.floor(0x100000000 / max) * max;
+    const buf = new Uint32Array(1);
+    let x;
+    do { crypto.getRandomValues(buf); x = buf[0]; } while (x >= limit);
+    return x % max;
+  }
+  function shuffle(list) {
+    const a = list.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = randomInt(i + 1);
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  // ---------- 名前 ----------
+  function getNames() {
+    const seen = new Set();
+    return state.namesText
+      .split(/[\n,、，]+/)
+      .map((s) => s.trim())
+      .filter((s) => s && !seen.has(s) && seen.add(s));
+  }
+  function remaining(names) {
+    return names.filter((n) => !state.picked.includes(n));
+  }
+
+  // ---------- 描画 ----------
+  function renderRoster() {
+    const names = getNames();
+    state.picked = state.picked.filter((n) => names.includes(n));
+    els.roster.innerHTML = "";
+    els.roster.style.display = state.showRoster ? "" : "none";
+    els.rosterNote.style.display = state.showRoster ? "" : "none";
+
+    if (names.length === 0) {
+      els.rosterNote.textContent = "右の設定に参加者の名前を入れてください";
+      els.rosterNote.style.display = "";
+      return;
+    }
+    for (const n of names) {
+      const chip = document.createElement("span");
+      chip.className = "chip" + (state.roundMode && state.picked.includes(n) ? " done" : "");
+      chip.textContent = n;
+      els.roster.appendChild(chip);
+    }
+    if (state.roundMode) {
+      const rest = remaining(names).length;
+      els.rosterNote.textContent = rest === 0
+        ? "全員話しました。次で新しい一巡が始まります"
+        : `まだの人 ${rest}人 ／ 全${names.length}人`;
+    } else {
+      els.rosterNote.textContent = `全${names.length}人から選びます`;
+    }
+  }
+
+  function setResult(text, cls) {
+    els.result.textContent = text;
+    els.result.className = "result " + cls;
+  }
+
+  function applyUI() {
+    document.documentElement.dataset.theme = state.theme
+      || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.body.classList.toggle("present", state.present);
+    els.btnSettings.textContent = "";
+    els.btnSettings.append(state.present ? "設定を出す" : "設定を隠す");
+    const k = document.createElement("kbd"); k.textContent = "S"; els.btnSettings.append(k);
+    els.footer.innerHTML = state.present
+      ? "<kbd>Space</kbd> で決める ・ <kbd>S</kbd> で設定を出す"
+      : "<kbd>Space</kbd> で決める ・ <kbd>S</kbd> で設定を隠す";
+    els.optRound.checked = state.roundMode;
+    els.optRoster.checked = state.showRoster;
+    els.optSpeed.value = state.speed;
+    els.btnReset.style.display = state.roundMode ? "" : "none";
+    renderRoster();
+  }
+
+  // ---------- 決める ----------
+  function spinDuration() {
+    const base = { short: 1000, normal: 2500, long: 4000 }[state.speed] || 2500;
+    return matchMedia("(prefers-reduced-motion: reduce)").matches ? Math.min(base, 600) : base;
+  }
+
+  function choose(names) {
+    let pool = state.roundMode ? remaining(names) : names.slice();
+    if (pool.length === 0) {             // 一巡が終わったら新しい一巡へ
+      state.picked = [];
+      pool = names.slice();
+    }
+    // 直前の人が連続しないように（他に候補がいるとき）
+    if (pool.length > 1 && state.last && pool.includes(state.last)) {
+      pool = pool.filter((n) => n !== state.last);
+    }
+    return pool[randomInt(pool.length)];
+  }
+
+  function pick() {
+    if (spinning) return;
+    const names = getNames();
+    if (names.length === 0) {
+      setResult("名前を入れてください", "placeholder");
+      if (state.present) { state.present = false; applyUI(); }
+      els.names.focus();
+      return;
+    }
+    document.body.classList.remove("order-mode");
+    const winner = choose(names);
+    const total = spinDuration();
+    const start = performance.now();
+    spinning = true;
+    els.btnPick.disabled = true;
+    els.label.textContent = "次に話すのは…";
+
+    let lastShown = null;
+    function tick() {
+      const t = performance.now() - start;
+      if (t >= total) {
+        finish();
+        return;
+      }
+      // だんだん遅くなるルーレット
+      let n = names[randomInt(names.length)];
+      if (names.length > 1 && n === lastShown) n = names[(names.indexOf(n) + 1) % names.length];
+      lastShown = n;
+      setResult(n, "spinning");
+      const progress = t / total;
+      setTimeout(tick, 50 + 280 * progress * progress);
+    }
+    function finish() {
+      setResult(winner, "decided");
+      els.label.textContent = "話すのは";
+      if (!state.picked.includes(winner)) state.picked.push(winner);
+      state.last = winner;
+      spinning = false;
+      els.btnPick.disabled = false;
+      save();
+      renderRoster();
+    }
+    if (names.length === 1) { finish(); return; }
+    tick();
+  }
+
+  // ---------- 順番をまとめて決める ----------
+  function makeOrder() {
+    if (spinning) return;
+    const names = getNames();
+    if (names.length === 0) { pick(); return; }
+    const ordered = shuffle(names);
+    els.order.innerHTML = "";
+    els.order.classList.toggle("single", ordered.length <= 5);
+    els.order.classList.toggle("many", ordered.length > 10 && ordered.length <= 24);
+    els.order.classList.toggle("crowd", ordered.length > 24);
+    ordered.forEach((n, i) => {
+      const li = document.createElement("li");
+      const num = document.createElement("span");
+      num.className = "num";
+      num.textContent = i + 1 + ".";
+      li.append(num, n);
+      els.order.appendChild(li);
+    });
+    document.body.classList.add("order-mode");
+    state.last = null;
+  }
+
+  function resetRound() {
+    if (spinning) return;
+    state.picked = [];
+    state.last = null;
+    document.body.classList.remove("order-mode");
+    setResult("？", "placeholder");
+    els.label.textContent = "次に話すのは…";
+    save();
+    renderRoster();
+  }
+
+  // ---------- 画面まわり ----------
+  function toggleSettings() { state.present = !state.present; save(); applyUI(); }
+  function toggleTheme() {
+    const cur = document.documentElement.dataset.theme;
+    state.theme = cur === "dark" ? "light" : "dark";
+    save(); applyUI();
+  }
+  function toggleFull() {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen();
+    } catch (e) {}
+  }
+
+  // ---------- イベント ----------
+  els.btnPick.addEventListener("click", pick);
+  els.btnOrder.addEventListener("click", makeOrder);
+  els.btnReset.addEventListener("click", resetRound);
+  els.btnSettings.addEventListener("click", toggleSettings);
+  els.btnTheme.addEventListener("click", toggleTheme);
+  els.btnFull.addEventListener("click", toggleFull);
+
+  els.names.addEventListener("input", () => {
+    state.namesText = els.names.value;
+    save(); renderRoster();
+  });
+  els.optRound.addEventListener("change", () => {
+    state.roundMode = els.optRound.checked; save(); applyUI();
+  });
+  els.optRoster.addEventListener("change", () => {
+    state.showRoster = els.optRoster.checked; save(); applyUI();
+  });
+  els.optSpeed.addEventListener("change", () => {
+    state.speed = els.optSpeed.value; save();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    const tag = (e.target.tagName || "").toLowerCase();
+    if (tag === "textarea" || tag === "select" || tag === "input") return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const key = e.key.toLowerCase();
+    if (key === " " || key === "enter") {
+      e.preventDefault();
+      if (tag === "button" && key === "enter") return; // ボタン側のクリックに任せる
+      pick();
+    }
+    else if (key === "o") makeOrder();
+    else if (key === "r") resetRound();
+    else if (key === "s") toggleSettings();
+    else if (key === "t") toggleTheme();
+    else if (key === "f") toggleFull();
+  });
+  // ボタンにフォーカスがあるとき Space が二重に効かないように
+  document.querySelectorAll("button").forEach((b) =>
+    b.addEventListener("keyup", (e) => { if (e.key === " ") e.preventDefault(); })
+  );
+
+  // ---------- 起動 ----------
+  load();
+  els.names.value = state.namesText;
+  applyUI();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+name: 新しいツールの提案
+description: ファシリテーションで使う新しいツールを提案する
+title: "[ツール] "
+labels: ["新しいツール", "レビュー待ち"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Claude が下書きし、人がレビューして `実装OK` ラベルを付けたら実装に進みます。
+        流れの詳細は docs/development-flow.md を見てください。
+  - type: textarea
+    id: scene
+    attributes:
+      label: 使う場面
+      description: どんな研修・会議の、どのタイミングで使うか。参加人数やオンライン／対面も。
+      placeholder: 例）オンライン研修のチェックインで、10〜20人の話す順番を決めるとき
+    validations:
+      required: true
+  - type: textarea
+    id: purpose
+    attributes:
+      label: 解決したいこと・ねらい
+      description: 今どんなことに困っているか。このツールで場にどんな変化を起こしたいか。
+    validations:
+      required: true
+  - type: textarea
+    id: screen
+    attributes:
+      label: 画面に映すもの（参加者に見せるもの）
+      description: 画面共有したとき、参加者に何が大きく見えていてほしいか。
+    validations:
+      required: true
+  - type: textarea
+    id: operation
+    attributes:
+      label: ファシリテーターの操作
+      description: 準備で入力するもの、進行中に押すボタンやキー。
+  - type: textarea
+    id: done
+    attributes:
+      label: 完成の条件
+      description: これができたら完成、と言える条件を箇条書きで。
+      placeholder: |
+        - [ ] ...
+        - [ ] 1280×720 の画面共有で文字がはっきり読める
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: 今回はやらないこと
+  - type: textarea
+    id: questions
+    attributes:
+      label: 確認したいこと
+      description: 決めきれていない点。レビューで答えてもらう。
